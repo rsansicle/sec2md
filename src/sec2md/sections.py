@@ -1,6 +1,6 @@
 """Section extraction utilities for SEC filings."""
 
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Literal
 from sec2md.models import Page, Section, FilingType, Item10K, Item10Q, ITEM_10K_MAPPING, ITEM_10Q_MAPPING
 from sec2md.section_extractor import SectionExtractor
 
@@ -40,7 +40,8 @@ def extract_sections(
 def get_section(
     sections: List[Section],
     item: Union[Item10K, Item10Q, str],
-    filing_type: FilingType = "10-K"
+    filing_type: FilingType = "10-K",
+    item_class: Optional[Literal["10-K", "10-Q", "generic"]] = None
 ) -> Optional[Section]:
     """
     Get a specific section by item enum or string.
@@ -49,6 +50,9 @@ def get_section(
         sections: List of sections from extract_sections()
         item: Item enum (Item10K.RISK_FACTORS) or string ("ITEM 1A")
         filing_type: Type of filing ("10-K" or "10-Q")
+        item_class: Item mapping behavior ("10-K", "10-Q", or "generic").
+            If None, defaults to filing_type for backwards compatibility.
+            Use "generic" to match custom section.item keys exactly.
 
     Returns:
         Section object if found, None otherwise
@@ -58,21 +62,38 @@ def get_section(
         >>> risk = sec2md.get_section(sections, Item10K.RISK_FACTORS)
         >>> print(risk.markdown())
     """
+    # Backwards compatibility: existing callers can continue using filing_type only.
+    active_item_class = item_class or filing_type
+
     # Map enum to (part, item) tuple
     if isinstance(item, Item10K):
-        if filing_type != "10-K":
-            raise ValueError(f"Item10K enum requires filing_type='10-K', got '{filing_type}'")
+        if active_item_class != "10-K":
+            raise ValueError(
+                f"Item10K enum requires item_class='10-K', got '{active_item_class}'"
+            )
         target_part, target_item = ITEM_10K_MAPPING[item]
     elif isinstance(item, Item10Q):
-        if filing_type != "10-Q":
-            raise ValueError(f"Item10Q enum requires filing_type='10-Q', got '{filing_type}'")
+        if active_item_class != "10-Q":
+            raise ValueError(
+                f"Item10Q enum requires item_class='10-Q', got '{active_item_class}'"
+            )
         target_part, target_item = ITEM_10Q_MAPPING[item]
     else:
-        # String format - normalize it
-        item_str = str(item).upper().strip()
-        if not item_str.startswith("ITEM"):
-            item_str = f"ITEM {item_str}"
-        target_item = item_str
+        # String format
+        item_str = str(item).strip()
+        if active_item_class == "generic":
+            # Generic mode: match custom keys exactly as they appear in section.item.
+            target_item = item_str
+        elif active_item_class in {"10-K", "10-Q"}:
+            # Standard SEC item normalization for 10-K/10-Q.
+            normalized = item_str.upper()
+            if not normalized.startswith("ITEM"):
+                normalized = f"ITEM {normalized}"
+            target_item = normalized
+        else:
+            raise ValueError(
+                f"Unknown item_class '{active_item_class}'. Expected '10-K', '10-Q', or 'generic'."
+            )
         target_part = None  # Match any part
 
     # Find matching section

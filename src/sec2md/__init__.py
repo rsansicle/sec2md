@@ -1,5 +1,14 @@
 """sec2md: Convert SEC filings to high-quality Markdown."""
 
+import warnings
+
+try:
+    from bs4 import XMLParsedAsHTMLWarning
+    warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
+except Exception:
+    # Keep import of sec2md resilient even if bs4 warning class changes.
+    pass
+
 from sec2md.core import convert_to_markdown, parse_filing
 from sec2md.utils import flatten_note
 from sec2md.sections import extract_sections, get_section
