@@ -34,7 +34,20 @@ def extract_sections(
     )
 
     # SectionExtractor now returns Section objects directly
-    return extractor.get_sections()
+    sections = extractor.get_sections()
+
+    # Ensure item keys are unique across sections:
+    # first occurrence stays as-is, later duplicates become "<item>_PART_<N>".
+    seen_counts: Dict[str, int] = {}
+    for section in sections:
+        if not section.item:
+            continue
+        count = seen_counts.get(section.item, 0) + 1
+        seen_counts[section.item] = count
+        if count > 1:
+            section.item = f"{section.item}_PART_{count}"
+
+    return sections
 
 
 def get_section(
